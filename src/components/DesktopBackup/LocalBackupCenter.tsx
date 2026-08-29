@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   HardDriveDownload,
   Upload,
@@ -15,18 +15,13 @@ import {
   Laptop,
   FileCode,
   Sparkles,
+  Zap,
+  Loader2,
 } from "lucide-react";
-import {
-  BusinessProfile,
-  Quotation,
-  Invoice,
-  BankTransaction,
-  Client,
-  Expense,
-  BankAccount,
-} from "../../types";
+import { BusinessProfile, Quotation, Invoice, BankTransaction, Client, Expense } from "../../types";
 import { storage } from "../../lib/storage";
-import { downloadOfflineDesktopApp } from "../../lib/offlineDesktopBundle";
+import { generateOfflineDesktopHTML } from "../../lib/offlineDesktopBundle";
+import { generateOfflineInstallationZip } from "../../lib/offlineDesktopZip";
 
 interface LocalBackupCenterProps {
   profile: BusinessProfile;
@@ -35,7 +30,6 @@ interface LocalBackupCenterProps {
   bankTransactions: BankTransaction[];
   clients: Client[];
   expenses?: Expense[];
-  bankAccounts?: BankAccount[];
   onReloadState: () => void;
 }
 
@@ -46,12 +40,22 @@ export const LocalBackupCenter: React.FC<LocalBackupCenterProps> = ({
   bankTransactions,
   clients,
   expenses = [],
-  bankAccounts = [],
   onReloadState,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [restoreMessage, setRestoreMessage] = useState<string>("");
   const [downloadedPackage, setDownloadedPackage] = useState<string | null>(null);
+  const [isGeneratingZip, setIsGeneratingZip] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -71,8 +75,7 @@ export const LocalBackupCenter: React.FC<LocalBackupCenterProps> = ({
     reader.readAsText(file);
   };
 
-  const triggerDownload = (content: string, filename: string, type: string = "text/plain") => {
-    const blob = new Blob([content], { type });
+  const triggerBlobDownload = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -85,13 +88,48 @@ export const LocalBackupCenter: React.FC<LocalBackupCenterProps> = ({
     setTimeout(() => setDownloadedPackage(null), 5000);
   };
 
-  // 1. Download Windows Batch & PowerShell Desktop Installer
+  const triggerDownload = (content: string, filename: string, type: string = "text/plain") => {
+    const blob = new Blob([content], { type });
+    triggerBlobDownload(blob, filename);
+  };
+
+  // 1. Download Complete ZIP Installation Package
+  const handleDownloadCompleteZipSuite = async () => {
+    try {
+      setIsGeneratingZip(true);
+      const sarsProfile = storage.getSarsProfile();
+      const sarsFilings = storage.getSarsFilings();
+      const bankAccounts = storage.getBankAccounts();
+      const currentExpenses = expenses.length ? expenses : storage.getExpenses();
+
+      const zipBlob = await generateOfflineInstallationZip({
+        profile,
+        clients,
+        quotations,
+        invoices,
+        bankAccounts,
+        bankTransactions,
+        expenses: currentExpenses,
+        sarsProfile,
+        sarsFilings,
+      });
+      const filename = `FastBooks_Offline_Desktop_Suite_${profile.ownerName.replace(/\s+/g, "_")}.zip`;
+      triggerBlobDownload(zipBlob, filename);
+    } catch (err) {
+      console.error("Failed to generate zip:", err);
+      handleDownloadOfflineHTMLBundle();
+    } finally {
+      setIsGeneratingZip(false);
+    }
+  };
+
+  // 2. Download Windows Batch Desktop Installer
   const handleDownloadWindowsInstaller = () => {
     const appUrl = window.location.href;
     const batContent = `@echo off
 :: =========================================================
 :: Fast-Books Desktop Application Installer for Windows
-:: Proprietor: ${profile.ownerName} - ${profile.businessName}
+:: Proprietor: ${profile.ownerName} - ${profile.tradingName || profile.companyName}
 :: =========================================================
 title Fast-Books Desktop Installer
 color 0A
@@ -125,7 +163,7 @@ pause
     triggerDownload(batContent, `Install_FastBooks_Windows_${profile.ownerName.replace(/\s+/g, "_")}.bat`, "text/plain");
   };
 
-  // 2. Download macOS Launcher Script
+  // 3. Download macOS Launcher Script
   const handleDownloadMacInstaller = () => {
     const appUrl = window.location.href;
     const commandContent = `#!/bin/bash
@@ -144,7 +182,7 @@ DESKTOP_PATH="$HOME/Desktop/Fast-Books.command"
 
 cat << 'EOF' > "$DESKTOP_PATH"
 #!/bin/bash
-open -a "Google Chrome" --args --app="${appUrl}" || open -a "Safari" "${appUrl}"
+open -a "Google Chrome" --args --app="${appUrl}" || open -a "Safari" "${appUrl}" || open "${appUrl}"
 EOF
 
 chmod +x "$DESKTOP_PATH"
@@ -156,50 +194,88 @@ open -a "Google Chrome" --args --app="$APP_URL" || open "$APP_URL"
     triggerDownload(commandContent, `Install_FastBooks_macOS_${profile.ownerName.replace(/\s+/g, "_")}.command`, "text/x-shellscript");
   };
 
-  // 3. Download Offline Standalone HTML Interactive App
+  // 4. Download Offline Standalone HTML App (100% Offline Single-File Application)
   const handleDownloadOfflineHTMLBundle = () => {
-    downloadOfflineDesktopApp({
+    const sarsProfile = storage.getSarsProfile();
+    const sarsFilings = storage.getSarsFilings();
+    const bankAccounts = storage.getBankAccounts();
+    const currentExpenses = expenses.length ? expenses : storage.getExpenses();
+
+    const htmlBundle = generateOfflineDesktopHTML({
       profile,
+      clients,
       quotations,
       invoices,
-      bankAccounts: bankAccounts.length > 0 ? bankAccounts : storage.getBankAccounts(),
+      bankAccounts,
       bankTransactions,
-      clients,
-      expenses: expenses.length > 0 ? expenses : storage.getExpenses(),
+      expenses: currentExpenses,
+      sarsProfile,
+      sarsFilings,
     });
-    setDownloadedPackage(`FastBooks_Desktop_Standalone_${new Date().toISOString().split("T")[0]}.html`);
-    setTimeout(() => setDownloadedPackage(null), 5000);
+    triggerDownload(htmlBundle, `FastBooks_Offline_App_${profile.ownerName.replace(/\s+/g, "_")}.html`, "text/html");
   };
 
-  // 4. Download PowerShell Daily Auto-Backup Script for Windows
-  const handleDownloadPowerShellAutoBackup = () => {
-    const psScript = `# =========================================================
-# Fast-Books Daily Automated Backup Script for Windows
-# Proprietor: ${profile.ownerName}
-# =========================================================
-
-$OwnerName = "${profile.ownerName}"
-$BusinessName = "${profile.businessName}"
-$BackupDir = "$HOME\\Documents\\FastBooks_Backups"
-
-if (-not (Test-Path $BackupDir)) {
-    New-Item -ItemType Directory -Path $BackupDir | Out-Null
-    Write-Host "Created Backup Directory: $BackupDir" -ForegroundColor Green
-}
-
-$Timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-$BackupFile = "$BackupDir\\FastBooks_Backup_$Timestamp.json"
-
-$AppUrl = "${window.location.href}"
-
-Write-Host "Starting Fast-Books Daily Auto-Backup for $BusinessName..." -ForegroundColor Cyan
-Write-Host "Backup target: $BackupFile" -ForegroundColor Yellow
-
-# Notification
-[System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms") | Out-Null
-[System.Windows.Forms.MessageBox]::Show("Fast-Books backup directory verified at $BackupDir", "Fast-Books Auto-Backup")
+  // 5. Download Linux .desktop Launcher
+  const handleDownloadLinuxLauncher = () => {
+    const appUrl = window.location.href;
+    const desktopContent = `[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Fast-Books PRO Desktop
+Comment=South African Bookkeeping & Tax Invoicing for ${profile.ownerName}
+Exec=xdg-open "${appUrl}"
+Icon=accessories-calculator
+Terminal=false
+Categories=Office;Finance;Accounting;
+StartupNotify=true
 `;
-    triggerDownload(psScript, `FastBooks_Daily_AutoBackup_${profile.ownerName.replace(/\s+/g, "_")}.ps1`, "text/plain");
+    triggerDownload(desktopContent, "Fast-Books.desktop", "application/x-desktop");
+  };
+
+  // 6. Download Local Node Server Runner
+  const handleDownloadOfflineServerRunner = () => {
+    const runnerContent = `@echo off
+:: =========================================================================
+:: Fast-Books PRO - Local Offline Server Quick-Start Script
+:: Runs Fast-Books completely offline on localhost:3000
+:: =========================================================================
+title Fast-Books Offline Server
+color 0A
+echo.
+echo ========================================================================
+echo   Starting Fast-Books Local Desktop Server on localhost:3000...
+echo ========================================================================
+echo.
+
+where node >nul 2>nul
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Node.js is not found in your PATH.
+    echo Please install Node.js from https://nodejs.org or use the Standalone HTML package.
+    echo.
+    pause
+    exit /b 1
+)
+
+echo Starting server...
+start http://localhost:3000
+npm run dev || node dist/server.cjs || npx vite
+
+pause
+`;
+    triggerDownload(runnerContent, "Run_FastBooks_Local_Server.bat", "text/plain");
+  };
+
+  // 7. Direct PWA Prompt
+  const handlePromptPWA = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      setDeferredPrompt(null);
+    } else {
+      alert(
+        "To install Fast-Books right now in Chrome / Edge:\n\nClick the 'Install Fast-Books' icon (computer monitor with down arrow) on the right side of the address bar, or click browser menu (⋮) > 'Save and share' > 'Install Fast-Books as app'."
+      );
+    }
   };
 
   const handleExportQuotesCSV = () => {
@@ -237,26 +313,9 @@ Write-Host "Backup target: $BackupFile" -ForegroundColor Yellow
       bankTransactions.map((tx) => ({
         Date: tx.date,
         Description: tx.description,
-        Category: tx.category || "",
         Reference: tx.reference,
         Amount: tx.amount,
         Reconciled: tx.isReconciled ? "Yes" : "No",
-      }))
-    );
-  };
-
-  const handleExportExpensesCSV = () => {
-    const exps = expenses.length > 0 ? expenses : storage.getExpenses();
-    storage.exportToCSV(
-      "fastbooks_expenses",
-      exps.map((e) => ({
-        Date: e.date,
-        Title: e.title,
-        Vendor: e.vendor,
-        Category: e.category,
-        Amount: e.amount,
-        TaxAmount: e.taxAmount || 0,
-        PaymentMethod: e.paymentMethod || "",
       }))
     );
   };
@@ -276,7 +335,7 @@ Write-Host "Backup target: $BackupFile" -ForegroundColor Yellow
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {/* Header Bar */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-800 text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-5">
         <div>
@@ -288,25 +347,34 @@ Write-Host "Backup target: $BackupFile" -ForegroundColor Yellow
             Desktop Computer Installation & Offline Downloads
           </h1>
           <p className="text-slate-300 text-xs sm:text-sm mt-1 max-w-2xl leading-relaxed">
-            Licensed strictly to <strong>{profile.ownerName}</strong> ({profile.businessName}). Download standalone offline apps, executable installers, desktop shortcuts, and local database backup tools directly to your PC.
+            Licensed to <strong>{profile.ownerName}</strong> ({profile.tradingName || profile.companyName}). Download standalone offline single-file apps, complete installation ZIP packages, desktop executable launchers, PWA packages, and local database backup files directly to your PC.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={handleDownloadCompleteZipSuite}
+            disabled={isGeneratingZip}
+            className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white font-extrabold text-xs sm:text-sm shadow-lg transition cursor-pointer flex items-center justify-center gap-2.5 whitespace-nowrap border border-emerald-400/40 shrink-0 active:scale-95"
+          >
+            {isGeneratingZip ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Building ZIP...</span>
+              </>
+            ) : (
+              <>
+                <FolderArchive className="w-5 h-5 text-emerald-200" />
+                <span>Download Desktop ZIP Suite</span>
+              </>
+            )}
+          </button>
           <button
             onClick={handleDownloadOfflineHTMLBundle}
-            className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs sm:text-sm shadow-lg transition cursor-pointer flex items-center justify-center gap-2.5 whitespace-nowrap border border-emerald-400/30"
+            className="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs sm:text-sm shadow-lg transition cursor-pointer flex items-center justify-center gap-2.5 whitespace-nowrap border border-indigo-400/30 shrink-0"
           >
-            <Download className="w-5 h-5 text-white" />
-            <span>Download Offline App (.html)</span>
-          </button>
-
-          <button
-            onClick={() => storage.exportBackupJSON()}
-            className="px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs sm:text-sm shadow-lg transition cursor-pointer flex items-center justify-center gap-2 whitespace-nowrap border border-indigo-400/30"
-          >
-            <HardDriveDownload className="w-4 h-4 text-emerald-300" />
-            <span>Export Database (.json)</span>
+            <FileCode className="w-5 h-5 text-emerald-300" />
+            <span>Offline HTML App</span>
           </button>
         </div>
       </div>
@@ -315,10 +383,46 @@ Write-Host "Backup target: $BackupFile" -ForegroundColor Yellow
         <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-emerald-300 text-xs sm:text-sm font-semibold flex items-center gap-3 animate-fade-in shadow-sm">
           <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
           <span>
-            <strong>Installation Package Downloaded:</strong> <code className="bg-emerald-950/60 px-2 py-0.5 rounded text-emerald-200">{downloadedPackage}</code> was successfully generated and saved to your computer!
+            <strong>Installation Package Downloaded:</strong> <code className="bg-emerald-950/60 px-2 py-0.5 rounded text-emerald-200">{downloadedPackage}</code> was successfully generated and saved to your Downloads folder!
           </span>
         </div>
       )}
+
+      {/* Standalone HTML App Hero Highlight */}
+      <div className="bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-900 border border-indigo-500/30 rounded-2xl p-6 sm:p-8 shadow-md text-white">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+          <div className="space-y-2 max-w-3xl">
+            <div className="flex items-center gap-2 text-emerald-400 text-xs font-extrabold uppercase tracking-wider">
+              <Sparkles className="w-4 h-4" />
+              <span>Recommended 100% Offline Method</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black text-white">
+              Fast-Books All-in-One Standalone Single-File Desktop App
+            </h2>
+            <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
+              Downloads a complete, self-contained HTML file bundling the Fast-Books accounting engine and all {invoices.length} invoices, {quotations.length} quotations, and {clients.length} clients currently recorded. Double-click to run on any computer offline with zero installation or internet connection.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+            <button
+              onClick={handleDownloadCompleteZipSuite}
+              disabled={isGeneratingZip}
+              className="px-5 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-emerald-950/60 transition cursor-pointer flex items-center justify-center gap-2.5 border border-emerald-400/40 active:scale-95"
+            >
+              <FolderArchive className="w-5 h-5 text-emerald-200" />
+              <span>Download Full ZIP (.zip)</span>
+            </button>
+            <button
+              onClick={handleDownloadOfflineHTMLBundle}
+              className="px-5 py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-xs sm:text-sm shadow-lg transition cursor-pointer flex items-center justify-center gap-2.5 border border-slate-600 active:scale-95"
+            >
+              <FileCode className="w-5 h-5 text-emerald-400" />
+              <span>Single File (.html)</span>
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Desktop Installation Packages Download Grid */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-sm space-y-5">
@@ -328,8 +432,8 @@ Write-Host "Backup target: $BackupFile" -ForegroundColor Yellow
               <Monitor className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-extrabold text-slate-900 text-base">Desktop Installer & Offline Packages</h2>
-              <p className="text-xs text-slate-500">Download system installers tailored for Jan Coetzee's computer</p>
+              <h2 className="font-extrabold text-slate-900 text-base">Desktop Installer & Launcher Packages</h2>
+              <p className="text-xs text-slate-500">Download system installers and launcher scripts tailored for {profile.ownerName}'s computer</p>
             </div>
           </div>
           <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200">
@@ -338,26 +442,27 @@ Write-Host "Backup target: $BackupFile" -ForegroundColor Yellow
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Standalone HTML Offline App */}
-          <div className="p-5 rounded-2xl border-2 border-emerald-500/40 bg-emerald-50/30 hover:bg-emerald-50/60 transition-all flex flex-col justify-between space-y-4 shadow-sm">
+          {/* Complete ZIP Package */}
+          <div className="p-5 rounded-2xl border border-emerald-300/80 bg-emerald-50/40 hover:bg-emerald-50/80 transition-all flex flex-col justify-between space-y-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                  Offline App (.html)
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  Complete Suite (.zip)
                 </span>
-                <FileCode className="w-5 h-5 text-emerald-600" />
+                <FolderArchive className="w-5 h-5 text-emerald-600" />
               </div>
-              <h3 className="font-extrabold text-slate-900 text-sm">Standalone Offline Desktop App</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Self-contained interactive application. Double click to run 100% offline with full Invoices, Expenses, Bank Recon, and local storage.
+              <h3 className="font-bold text-slate-900 text-sm">Full Offline ZIP Suite</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Complete package containing HTML app, Windows & Mac installers, Linux entry, and database snapshot.
               </p>
             </div>
             <button
-              onClick={handleDownloadOfflineHTMLBundle}
-              className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-md border border-emerald-400/30"
+              onClick={handleDownloadCompleteZipSuite}
+              disabled={isGeneratingZip}
+              className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-sm border border-emerald-500/40"
             >
-              <Download className="w-4 h-4 text-white" />
-              <span>Download Offline App</span>
+              <Download className="w-4 h-4" />
+              <span>Download ZIP Suite</span>
             </button>
           </div>
 
@@ -379,7 +484,7 @@ Write-Host "Backup target: $BackupFile" -ForegroundColor Yellow
               onClick={handleDownloadWindowsInstaller}
               className="w-full py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-sm border border-slate-700"
             >
-              <Download className="w-4 h-4 text-emerald-400" />
+              <Download className="w-4 h-4 text-sky-400" />
               <span>Download Windows Installer</span>
             </button>
           </div>
@@ -407,26 +512,26 @@ Write-Host "Backup target: $BackupFile" -ForegroundColor Yellow
             </button>
           </div>
 
-          {/* Auto Backup PowerShell Script */}
+          {/* Linux Launcher */}
           <div className="p-5 rounded-2xl border border-slate-200/90 bg-slate-50/60 hover:bg-slate-50 transition-all flex flex-col justify-between space-y-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                  Auto-Backup (.ps1)
+                  Linux (.desktop)
                 </span>
                 <Terminal className="w-5 h-5 text-slate-400" />
               </div>
-              <h3 className="font-bold text-slate-900 text-sm">Daily Auto-Backup Script</h3>
+              <h3 className="font-bold text-slate-900 text-sm">Linux Desktop Entry</h3>
               <p className="text-xs text-slate-500 leading-relaxed">
-                PowerShell script for Windows Task Scheduler to back up database files to Documents automatically.
+                Standard Linux XDG desktop shortcut for Ubuntu, Debian, Fedora, and Arch distributions.
               </p>
             </div>
             <button
-              onClick={handleDownloadPowerShellAutoBackup}
+              onClick={handleDownloadLinuxLauncher}
               className="w-full py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-sm border border-slate-700"
             >
               <Download className="w-4 h-4 text-amber-400" />
-              <span>Download PowerShell Script</span>
+              <span>Download Linux Entry</span>
             </button>
           </div>
         </div>
@@ -438,15 +543,23 @@ Write-Host "Backup target: $BackupFile" -ForegroundColor Yellow
         <div className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-sm space-y-4">
           <div className="flex items-center space-x-2 text-slate-900 font-bold text-base border-b border-slate-100 pb-3">
             <Monitor className="w-5 h-5 text-indigo-600" />
-            <h2>Web App / PWA Desktop Installation Guide</h2>
+            <h2>Progressive Web App (PWA) Direct Browser Installation</h2>
           </div>
 
           <div className="space-y-3 text-xs sm:text-sm text-slate-700">
             <div className="p-3.5 bg-indigo-50/80 rounded-xl border border-indigo-100 flex items-start gap-3">
               <CheckCircle2 className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
-              <p className="text-xs text-indigo-950 leading-relaxed font-medium">
-                Fast-Books is engineered with Progressive Web App (PWA) technology. You can install it directly from your web browser as a native desktop program with taskbar integration and full offline functionality!
-              </p>
+              <div className="space-y-2">
+                <p className="text-xs text-indigo-950 leading-relaxed font-medium">
+                  Fast-Books is an offline-ready Progressive Web App (PWA). You can install it directly from your web browser as a native desktop program with taskbar integration and full offline functionality!
+                </p>
+                <button
+                  onClick={handlePromptPWA}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-sm"
+                >
+                  Click Here to Install Fast-Books to Desktop
+                </button>
+              </div>
             </div>
 
             <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider pt-2">
@@ -525,7 +638,7 @@ Write-Host "Backup target: $BackupFile" -ForegroundColor Yellow
           Export individual data collections as standard CSV files for viewing in Microsoft Excel, Google Sheets, or local tax accounting software:
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <button
             onClick={handleExportQuotesCSV}
             className="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-slate-100 text-slate-900 font-bold text-xs flex items-center justify-between transition cursor-pointer"
@@ -543,14 +656,6 @@ Write-Host "Backup target: $BackupFile" -ForegroundColor Yellow
           </button>
 
           <button
-            onClick={handleExportExpensesCSV}
-            className="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-slate-100 text-slate-900 font-bold text-xs flex items-center justify-between transition cursor-pointer"
-          >
-            <span>Expenses CSV</span>
-            <FileSpreadsheet className="w-4 h-4 text-rose-600" />
-          </button>
-
-          <button
             onClick={handleExportBankCSV}
             className="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-slate-100 text-slate-900 font-bold text-xs flex items-center justify-between transition cursor-pointer"
           >
@@ -562,7 +667,7 @@ Write-Host "Backup target: $BackupFile" -ForegroundColor Yellow
             onClick={handleExportClientsCSV}
             className="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-slate-100 text-slate-900 font-bold text-xs flex items-center justify-between transition cursor-pointer"
           >
-            <span>Clients CSV</span>
+            <span>Clients Directory CSV</span>
             <FileSpreadsheet className="w-4 h-4 text-sky-600" />
           </button>
         </div>

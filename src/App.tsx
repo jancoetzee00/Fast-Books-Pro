@@ -17,6 +17,8 @@ import { FinancialReports } from "./components/Reports/FinancialReports";
 import { SettingsModal } from "./components/Settings/SettingsModal";
 import { GoogleAIHub } from "./components/GoogleAI/GoogleAIHub";
 import { SarsVatHub } from "./components/SarsVat/SarsVatHub";
+import { LocalBackupCenter } from "./components/DesktopBackup/LocalBackupCenter";
+import { OfflineDownloadModal } from "./components/DesktopBackup/OfflineDownloadModal";
 
 import {
   BusinessProfile,
@@ -47,6 +49,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"business" | "backup" | "credentials" | "banking" | "terms">("business");
   const [isBankLoginOpen, setIsBankLoginOpen] = useState(false);
+  const [isOfflineModalOpen, setIsOfflineModalOpen] = useState(false);
 
   const handleOpenSettings = (tab: "business" | "backup" | "credentials" | "banking" | "terms" = "business") => {
     setSettingsTab(tab);
@@ -354,6 +357,7 @@ export default function App() {
       <Header
         profile={profile}
         onOpenSettings={() => handleOpenSettings("business")}
+        onOpenOfflineModal={() => setIsOfflineModalOpen(true)}
         onNavigate={(tab) => {
           if (tab === "desktop-backup") {
             handleOpenSettings("backup");
@@ -516,6 +520,18 @@ export default function App() {
           />
         )}
 
+        {activeTab === "backup" && (
+          <LocalBackupCenter
+            profile={profile}
+            quotations={quotations}
+            invoices={invoices}
+            bankTransactions={bankTransactions}
+            clients={clients}
+            expenses={expenses}
+            onReloadState={handleReloadState}
+          />
+        )}
+
       </main>
 
       {/* Footer */}
@@ -603,6 +619,19 @@ export default function App() {
           profile={profile}
           onClose={() => setRecordingPaymentInvoice(null)}
           onSavePayment={handleSavePaymentRecord}
+        />
+      )}
+
+      {isOfflineModalOpen && (
+        <OfflineDownloadModal
+          profile={profile}
+          clients={clients}
+          quotations={quotations}
+          invoices={invoices}
+          bankAccounts={bankAccounts}
+          bankTransactions={bankTransactions}
+          expenses={expenses}
+          onClose={() => setIsOfflineModalOpen(false)}
         />
       )}
     </div>

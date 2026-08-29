@@ -7,6 +7,8 @@ import {
   Landmark,
   Settings,
   Sparkles,
+  Monitor,
+  HardDriveDownload,
 } from "lucide-react";
 import { BusinessProfile } from "../types";
 import { storage } from "../lib/storage";
@@ -15,12 +17,14 @@ interface HeaderProps {
   profile: BusinessProfile;
   onOpenSettings: () => void;
   onNavigate: (tab: string) => void;
+  onOpenOfflineModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   profile,
   onOpenSettings,
   onNavigate,
+  onOpenOfflineModal,
 }) => {
   return (
     <header className="bg-slate-900 border-b border-slate-800 text-white sticky top-0 z-30 shadow-md">
@@ -51,18 +55,29 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Quick Info & Action Bar */}
           <div className="flex items-center space-x-2 sm:space-x-3">
+            {/* Offline Desktop Download Button */}
+            <button
+              onClick={onOpenOfflineModal ? onOpenOfflineModal : () => onNavigate("backup")}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold text-xs shadow-sm hover:shadow transition-all cursor-pointer border border-emerald-400/40 animate-pulse-slow"
+              title="Download Fast-Books for Offline Desktop Use (.html, .bat, .command, PWA)"
+            >
+              <HardDriveDownload className="w-3.5 h-3.5 text-emerald-200" />
+              <span className="hidden sm:inline">Offline Desktop App</span>
+              <span className="sm:hidden">Offline</span>
+            </button>
+
             {/* Google AI Studio Bridge Status */}
             <button
               onClick={() => onNavigate("google-ai")}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/40 text-xs font-semibold text-indigo-300 transition-all cursor-pointer shadow-sm active:scale-95"
+              className="hidden md:flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/40 text-xs font-semibold text-indigo-300 transition-all cursor-pointer shadow-sm active:scale-95"
               title="Google AI Studio Cross-App Accounting Hub"
             >
               <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
-              <span className="hidden sm:inline">Google AI Hub</span>
+              <span>Google AI Hub</span>
             </button>
 
             {/* Currency Indicator */}
-            <div className="hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-800/90 border border-slate-700/80 text-xs text-slate-300 shadow-inner">
+            <div className="hidden lg:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-800/90 border border-slate-700/80 text-xs text-slate-300 shadow-inner">
               <span className="text-slate-400 font-medium">Currency:</span>
               <span className="font-bold text-emerald-400">
                 {profile.currency} ({profile.currencySymbol})
@@ -72,7 +87,7 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Bank Sync Status */}
             <button
               onClick={() => onNavigate("bank-recon")}
-              className="hidden lg:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-800/70 text-xs font-medium text-emerald-300 hover:bg-emerald-900/60 transition-all cursor-pointer shadow-sm hover:border-emerald-700"
+              className="hidden xl:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-800/70 text-xs font-medium text-emerald-300 hover:bg-emerald-900/60 transition-all cursor-pointer shadow-sm hover:border-emerald-700"
               title="Click to view bank feeds & reconciliation"
             >
               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -83,12 +98,11 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Download Local Backup */}
             <button
               onClick={() => storage.exportBackupJSON()}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium text-xs shadow-sm hover:shadow transition-all cursor-pointer border border-indigo-500/50"
-              title="Export complete database JSON to Jan Coetzee's local drive"
+              className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-900 text-slate-200 font-medium text-xs shadow-sm hover:shadow transition-all cursor-pointer border border-slate-700"
+              title="Export complete database JSON to local disk"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Download Local Backup</span>
-              <span className="md:hidden">Backup</span>
+              <Download className="w-3.5 h-3.5 text-slate-400" />
+              <span>Backup JSON</span>
             </button>
 
             {/* Settings */}

@@ -59,6 +59,13 @@ export const Navigation: React.FC<NavigationProps> = ({
     { id: "expenses", label: "Expenses", icon: CreditCard },
     { id: "clients", label: "Clients", icon: Users },
     { id: "reports", label: "Financial Reports", icon: BarChart3 },
+    {
+      id: "backup",
+      label: "Desktop & Offline",
+      icon: HardDriveDownload,
+      badge: "Offline",
+      badgeColor: "bg-emerald-400 text-slate-950 font-bold",
+    },
   ];
 
   return (

@@ -136,7 +136,6 @@ export interface BankTransaction {
   amount: number; // Positive = Deposit/Money In, Negative = Withdrawal/Money Out
   reference: string;
   category?: string;
-  tags?: string[];
   isReconciled: boolean;
   matchedType?: "invoice" | "expense" | "transfer";
   matchedId?: string;
@@ -144,22 +143,10 @@ export interface BankTransaction {
   aiSuggestedMatchId?: string;
 }
 
-export type ExpenseCategory =
-  | "Office Supplies"
-  | "Utilities"
-  | "Travel"
-  | "Vehicle & Petrol"
-  | "Software & Cloud"
-  | "Rent & Property"
-  | "Professional Fees"
-  | "Marketing & Ads"
-  | "Operating Expenses"
-  | "Other";
-
 export interface Expense {
   id: string;
   title: string;
-  category: ExpenseCategory;
+  category: "Operating Expenses" | "Rent & Property" | "Utilities" | "Vehicle & Petrol" | "Software & Cloud" | "Office Supplies" | "Professional Fees" | "Marketing & Ads" | "Other";
   vendor: string;
   date: string;
   amount: number;

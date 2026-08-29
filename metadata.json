@@ -1,6 +1,6 @@
 {
   "name": "Fast-Books",
-  "description": "Comprehensive South African bookkeeping system with quotations, tax invoicing, bank reconciliation, ZA auto parts ecosystem integration, SARS eFiling compliance, and monthly 15% VAT201 returns.",
+  "description": "Comprehensive South African bookkeeping system with offline desktop downloads, standalone HTML application bundling, quotations, tax invoicing, bank reconciliation, ZA auto parts integration, SARS eFiling compliance, and monthly 15% VAT returns.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

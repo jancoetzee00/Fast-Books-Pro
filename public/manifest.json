@@ -1,0 +1,40 @@
+{
+  "name": "Fast-Books Desktop Bookkeeping PRO",
+  "short_name": "Fast-Books",
+  "description": "South African bookkeeping system, tax invoicing, quotations, bank reconciliation, and SARS 15% VAT compliance.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#4f46e5",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Invoice",
+      "url": "/?tab=invoices",
+      "description": "Create a new client tax invoice"
+    },
+    {
+      "name": "New Quotation",
+      "url": "/?tab=quotations",
+      "description": "Draft a formal price quotation"
+    },
+    {
+      "name": "Bank Recon",
+      "url": "/?tab=bank-recon",
+      "description": "Reconcile business bank statements"
+    },
+    {
+      "name": "Offline Desktop Hub",
+      "url": "/?tab=desktop-backup",
+      "description": "Desktop installation and offline database tools"
+    }
+  ]
+}
