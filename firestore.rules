@@ -1,0 +1,159 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Entity validation functions
+    function isValidProfile(data) {
+      return data.ownerName is string && data.ownerName.size() <= 150 &&
+             data.companyName is string && data.companyName.size() <= 200 &&
+             data.email is string && data.email.size() <= 150;
+    }
+
+    function isValidClient(data) {
+      return data.name is string && data.name.size() <= 150 &&
+             data.email is string && data.email.size() <= 150 &&
+             data.userId is string && data.userId.size() <= 128;
+    }
+
+    function isValidQuotation(data) {
+      return data.quoteNumber is string && data.quoteNumber.size() <= 64 &&
+             data.clientName is string && data.clientName.size() <= 150 &&
+             data.grandTotal is number &&
+             data.status in ['draft', 'sent', 'accepted', 'declined', 'converted'] &&
+             data.userId is string && data.userId.size() <= 128;
+    }
+
+    function isValidInvoice(data) {
+      return data.invoiceNumber is string && data.invoiceNumber.size() <= 64 &&
+             data.clientName is string && data.clientName.size() <= 150 &&
+             data.grandTotal is number &&
+             data.status in ['draft', 'issued', 'partially_paid', 'paid', 'overdue', 'cancelled'] &&
+             data.userId is string && data.userId.size() <= 128;
+    }
+
+    function isValidBankAccount(data) {
+      return data.bankName is string && data.bankName.size() <= 100 &&
+             data.accountNumber is string && data.accountNumber.size() <= 50 &&
+             data.userId is string && data.userId.size() <= 128;
+    }
+
+    function isValidBankTransaction(data) {
+      return data.bankAccountId is string && data.bankAccountId.size() <= 128 &&
+             data.amount is number &&
+             data.description is string && data.description.size() <= 300 &&
+             data.userId is string && data.userId.size() <= 128;
+    }
+
+    function isValidExpense(data) {
+      return data.title is string && data.title.size() <= 200 &&
+             data.amount is number &&
+             data.userId is string && data.userId.size() <= 128;
+    }
+
+    function isValidSarsProfile(data) {
+      return (data.registeredName == null || (data.registeredName is string && data.registeredName.size() <= 200)) &&
+             (data.vatRegistrationNumber == null || (data.vatRegistrationNumber is string && data.vatRegistrationNumber.size() <= 50));
+    }
+
+    function isValidSarsFiling(data) {
+      return data.filingType is string && data.filingType.size() <= 50 &&
+             data.title is string && data.title.size() <= 150 &&
+             data.userId is string && data.userId.size() <= 128;
+    }
+
+    // User data trees
+    match /users/{userId} {
+      allow get, list: if isOwner(userId);
+
+      // Business Profile
+      match /profile/{docId} {
+        allow get: if isOwner(userId) && isValidId(docId);
+        allow create, update: if isOwner(userId) && isValidId(docId) && isValidProfile(incoming());
+        allow delete: if isOwner(userId) && isValidId(docId);
+      }
+
+      // Clients
+      match /clients/{clientId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(clientId) && isValidClient(incoming()) && incoming().userId == userId;
+        allow delete: if isOwner(userId) && isValidId(clientId);
+      }
+
+      // Quotations
+      match /quotations/{quotationId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(quotationId) && isValidQuotation(incoming()) && incoming().userId == userId;
+        allow delete: if isOwner(userId) && isValidId(quotationId);
+      }
+
+      // Invoices
+      match /invoices/{invoiceId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(invoiceId) && isValidInvoice(incoming()) && incoming().userId == userId;
+        allow delete: if isOwner(userId) && isValidId(invoiceId);
+      }
+
+      // Bank Accounts
+      match /bankAccounts/{accountId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(accountId) && isValidBankAccount(incoming()) && incoming().userId == userId;
+        allow delete: if isOwner(userId) && isValidId(accountId);
+      }
+
+      // Bank Transactions
+      match /bankTransactions/{transactionId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(transactionId) && isValidBankTransaction(incoming()) && incoming().userId == userId;
+        allow delete: if isOwner(userId) && isValidId(transactionId);
+      }
+
+      // Expenses
+      match /expenses/{expenseId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(expenseId) && isValidExpense(incoming()) && incoming().userId == userId;
+        allow delete: if isOwner(userId) && isValidId(expenseId);
+      }
+
+      // SARS Compliance Profile
+      match /sars/{docId} {
+        allow get: if isOwner(userId) && isValidId(docId);
+        allow create, update: if isOwner(userId) && isValidId(docId) && isValidSarsProfile(incoming());
+        allow delete: if isOwner(userId) && isValidId(docId);
+      }
+
+      // SARS Filings
+      match /sarsFilings/{filingId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(filingId) && isValidSarsFiling(incoming()) && incoming().userId == userId;
+        allow delete: if isOwner(userId) && isValidId(filingId);
+      }
+    }
+  }
+}

@@ -1,0 +1,233 @@
+{
+  "entities": {
+    "BusinessProfile": {
+      "title": "BusinessProfile",
+      "description": "Sole proprietor business profile and tax settings",
+      "type": "object",
+      "properties": {
+        "ownerName": { "type": "string", "maxLength": 150 },
+        "companyName": { "type": "string", "maxLength": 200 },
+        "tradingName": { "type": "string", "maxLength": 200 },
+        "registrationNumber": { "type": "string", "maxLength": 100 },
+        "taxNumber": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "address": { "type": "string", "maxLength": 300 },
+        "bankName": { "type": "string", "maxLength": 100 },
+        "bankAccountHolder": { "type": "string", "maxLength": 150 },
+        "bankAccountNumber": { "type": "string", "maxLength": 50 },
+        "bankBranchCode": { "type": "string", "maxLength": 20 },
+        "currency": { "type": "string", "maxLength": 10 },
+        "currencySymbol": { "type": "string", "maxLength": 5 },
+        "defaultTaxRate": { "type": "number" },
+        "quotationNotes": { "type": "string", "maxLength": 1000 },
+        "invoiceTerms": { "type": "string", "maxLength": 1000 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["ownerName", "companyName", "email"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Client or debtor record for invoicing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 150 },
+        "companyName": { "type": "string", "maxLength": 200 },
+        "email": { "type": "string", "maxLength": 150 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "taxNumber": { "type": "string", "maxLength": 100 },
+        "address": { "type": "string", "maxLength": 300 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "email", "userId"]
+    },
+    "Quotation": {
+      "title": "Quotation",
+      "description": "Sales quote generated for a client",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "quoteNumber": { "type": "string", "maxLength": 64 },
+        "clientId": { "type": "string", "maxLength": 128 },
+        "clientName": { "type": "string", "maxLength": 150 },
+        "clientEmail": { "type": "string", "maxLength": 150 },
+        "date": { "type": "string", "maxLength": 30 },
+        "expiryDate": { "type": "string", "maxLength": 30 },
+        "subtotal": { "type": "number" },
+        "taxTotal": { "type": "number" },
+        "discountTotal": { "type": "number" },
+        "grandTotal": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "sent", "accepted", "declined", "converted"] },
+        "convertedToInvoiceId": { "type": "string", "maxLength": 128 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "terms": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["quoteNumber", "clientName", "grandTotal", "status", "userId"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Tax invoice generated for a client",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "invoiceNumber": { "type": "string", "maxLength": 64 },
+        "quotationId": { "type": "string", "maxLength": 128 },
+        "clientId": { "type": "string", "maxLength": 128 },
+        "clientName": { "type": "string", "maxLength": 150 },
+        "clientEmail": { "type": "string", "maxLength": 150 },
+        "date": { "type": "string", "maxLength": 30 },
+        "dueDate": { "type": "string", "maxLength": 30 },
+        "subtotal": { "type": "number" },
+        "taxTotal": { "type": "number" },
+        "grandTotal": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "issued", "partially_paid", "paid", "overdue", "cancelled"] },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "terms": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["invoiceNumber", "clientName", "grandTotal", "status", "userId"]
+    },
+    "BankAccount": {
+      "title": "BankAccount",
+      "description": "Bank account connected for reconciliation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "bankName": { "type": "string", "maxLength": 100 },
+        "accountName": { "type": "string", "maxLength": 150 },
+        "accountNumber": { "type": "string", "maxLength": 50 },
+        "branchCode": { "type": "string", "maxLength": 20 },
+        "accountType": { "type": "string", "maxLength": 50 },
+        "balance": { "type": "number" },
+        "lastSynced": { "type": "string", "maxLength": 50 },
+        "isConnected": { "type": "boolean" },
+        "logoColor": { "type": "string", "maxLength": 30 }
+      },
+      "required": ["bankName", "accountNumber", "userId"]
+    },
+    "BankTransaction": {
+      "title": "BankTransaction",
+      "description": "Bank statement transaction line item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "bankAccountId": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 30 },
+        "description": { "type": "string", "maxLength": 300 },
+        "amount": { "type": "number" },
+        "reference": { "type": "string", "maxLength": 100 },
+        "category": { "type": "string", "maxLength": 100 },
+        "isReconciled": { "type": "boolean" },
+        "matchedType": { "type": "string", "maxLength": 50 },
+        "matchedId": { "type": "string", "maxLength": 128 },
+        "matchedReference": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["bankAccountId", "date", "description", "amount", "userId"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Operating expenditure line item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "category": { "type": "string", "maxLength": 100 },
+        "vendor": { "type": "string", "maxLength": 150 },
+        "date": { "type": "string", "maxLength": 30 },
+        "amount": { "type": "number" },
+        "taxAmount": { "type": "number" },
+        "bankTransactionId": { "type": "string", "maxLength": 128 },
+        "isPaid": { "type": "boolean" },
+        "paymentMethod": { "type": "string", "maxLength": 50 },
+        "notes": { "type": "string", "maxLength": 1000 }
+      },
+      "required": ["title", "amount", "date", "userId"]
+    },
+    "SarsComplianceProfile": {
+      "title": "SarsComplianceProfile",
+      "description": "South African Revenue Service compliance settings",
+      "type": "object",
+      "properties": {
+        "vatRegistrationNumber": { "type": "string", "maxLength": 50 },
+        "incomeTaxNumber": { "type": "string", "maxLength": 50 },
+        "payeNumber": { "type": "string", "maxLength": 50 },
+        "uifNumber": { "type": "string", "maxLength": 50 },
+        "registeredName": { "type": "string", "maxLength": 200 },
+        "tradeName": { "type": "string", "maxLength": 200 },
+        "vatCategory": { "type": "string", "maxLength": 50 },
+        "taxPinNumber": { "type": "string", "maxLength": 50 },
+        "taxClearanceStatus": { "type": "string", "maxLength": 50 },
+        "taxOffice": { "type": "string", "maxLength": 100 }
+      }
+    },
+    "SarsFilingItem": {
+      "title": "SarsFilingItem",
+      "description": "Scheduled or historical SARS tax filing record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "filingType": { "type": "string", "maxLength": 50 },
+        "title": { "type": "string", "maxLength": 150 },
+        "periodLabel": { "type": "string", "maxLength": 100 },
+        "taxYear": { "type": "number" },
+        "dueDate": { "type": "string", "maxLength": 30 },
+        "liabilityAmount": { "type": "number" },
+        "status": { "type": "string", "maxLength": 50 },
+        "sarsPrn": { "type": "string", "maxLength": 100 },
+        "filedDate": { "type": "string", "maxLength": 30 },
+        "paymentDate": { "type": "string", "maxLength": 30 },
+        "notes": { "type": "string", "maxLength": 1000 }
+      },
+      "required": ["filingType", "title", "dueDate", "userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/profile/business": {
+      "schema": { "$ref": "#/entities/BusinessProfile" },
+      "description": "User's business profile document"
+    },
+    "/users/{userId}/clients/{clientId}": {
+      "schema": { "$ref": "#/entities/Client" },
+      "description": "Client directory collection for user"
+    },
+    "/users/{userId}/quotations/{quotationId}": {
+      "schema": { "$ref": "#/entities/Quotation" },
+      "description": "Quotations collection for user"
+    },
+    "/users/{userId}/invoices/{invoiceId}": {
+      "schema": { "$ref": "#/entities/Invoice" },
+      "description": "Invoices collection for user"
+    },
+    "/users/{userId}/bankAccounts/{accountId}": {
+      "schema": { "$ref": "#/entities/BankAccount" },
+      "description": "Bank accounts for user"
+    },
+    "/users/{userId}/bankTransactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/BankTransaction" },
+      "description": "Bank transactions for user"
+    },
+    "/users/{userId}/expenses/{expenseId}": {
+      "schema": { "$ref": "#/entities/Expense" },
+      "description": "Business expenses for user"
+    },
+    "/users/{userId}/sars/compliance": {
+      "schema": { "$ref": "#/entities/SarsComplianceProfile" },
+      "description": "SARS compliance settings for user"
+    },
+    "/users/{userId}/sarsFilings/{filingId}": {
+      "schema": { "$ref": "#/entities/SarsFilingItem" },
+      "description": "SARS filing timeline items for user"
+    }
+  }
+}

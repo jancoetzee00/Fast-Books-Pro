@@ -19,6 +19,7 @@ import { GoogleAIHub } from "./components/GoogleAI/GoogleAIHub";
 import { SarsVatHub } from "./components/SarsVat/SarsVatHub";
 import { LocalBackupCenter } from "./components/DesktopBackup/LocalBackupCenter";
 import { OfflineDownloadModal } from "./components/DesktopBackup/OfflineDownloadModal";
+import { CloudSyncModal } from "./components/Firebase/CloudSyncModal";
 
 import {
   BusinessProfile,
@@ -31,8 +32,30 @@ import {
   PaymentRecord,
 } from "./types";
 import { storage } from "./lib/storage";
+import {
+  auth,
+  subscribeToUserCloudData,
+  saveProfileToCloud,
+  saveClientToCloud,
+  deleteClientFromCloud,
+  saveQuotationToCloud,
+  deleteQuotationFromCloud,
+  saveInvoiceToCloud,
+  deleteInvoiceFromCloud,
+  saveBankAccountToCloud,
+  deleteBankAccountFromCloud,
+  saveBankTransactionToCloud,
+  deleteBankTransactionFromCloud,
+  saveExpenseToCloud,
+  deleteExpenseFromCloud,
+} from "./lib/firebase";
+import { onAuthStateChanged, User } from "firebase/auth";
 
 export default function App() {
+  // Authentication & Cloud Sync
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isCloudSyncOpen, setIsCloudSyncOpen] = useState(false);
+
   // Primary persistent state
   const [profile, setProfile] = useState<BusinessProfile>(() => storage.getProfile());
   const [clients, setClients] = useState<Client[]>(() => storage.getClients());
@@ -41,6 +64,52 @@ export default function App() {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>(() => storage.getBankAccounts());
   const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>(() => storage.getBankTransactions());
   const [expenses, setExpenses] = useState<Expense[]>(() => storage.getExpenses());
+
+  // Listen to Firebase Auth state
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+    });
+    return () => unsub();
+  }, []);
+
+  // Listen to Real-time Firestore sync when user is signed in
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const unsub = subscribeToUserCloudData(currentUser.uid, (data) => {
+      if (data.profile) {
+        setProfile(data.profile);
+        storage.saveProfile(data.profile);
+      }
+      if (data.clients && data.clients.length > 0) {
+        setClients(data.clients);
+        storage.saveClients(data.clients);
+      }
+      if (data.quotations && data.quotations.length > 0) {
+        setQuotations(data.quotations);
+        storage.saveQuotations(data.quotations);
+      }
+      if (data.invoices && data.invoices.length > 0) {
+        setInvoices(data.invoices);
+        storage.saveInvoices(data.invoices);
+      }
+      if (data.bankAccounts && data.bankAccounts.length > 0) {
+        setBankAccounts(data.bankAccounts);
+        storage.saveBankAccounts(data.bankAccounts);
+      }
+      if (data.bankTransactions && data.bankTransactions.length > 0) {
+        setBankTransactions(data.bankTransactions);
+        storage.saveBankTransactions(data.bankTransactions);
+      }
+      if (data.expenses && data.expenses.length > 0) {
+        setExpenses(data.expenses);
+        storage.saveExpenses(data.expenses);
+      }
+    });
+
+    return () => unsub();
+  }, [currentUser]);
 
   // UI Navigation state
   const [activeTab, setActiveTab] = useState<string>("dashboard");
@@ -80,6 +149,9 @@ export default function App() {
   const handleSaveProfile = (updated: BusinessProfile) => {
     setProfile(updated);
     storage.saveProfile(updated);
+    if (currentUser) {
+      saveProfileToCloud(currentUser.uid, updated).catch(console.error);
+    }
     setIsSettingsOpen(false);
   };
 
@@ -88,12 +160,18 @@ export default function App() {
     const updated = [client, ...clients];
     setClients(updated);
     storage.saveClients(updated);
+    if (currentUser) {
+      saveClientToCloud(currentUser.uid, client).catch(console.error);
+    }
   };
 
   const handleDeleteClient = (id: string) => {
     const updated = clients.filter((c) => c.id !== id);
     setClients(updated);
     storage.saveClients(updated);
+    if (currentUser) {
+      deleteClientFromCloud(currentUser.uid, id).catch(console.error);
+    }
   };
 
   // Quotation handlers
@@ -107,6 +185,9 @@ export default function App() {
     }
     setQuotations(updated);
     storage.saveQuotations(updated);
+    if (currentUser) {
+      saveQuotationToCloud(currentUser.uid, quotation).catch(console.error);
+    }
     setIsQuotationEditorOpen(false);
     setEditingQuotation(null);
   };
@@ -115,12 +196,19 @@ export default function App() {
     const updated = quotations.filter((q) => q.id !== id);
     setQuotations(updated);
     storage.saveQuotations(updated);
+    if (currentUser) {
+      deleteQuotationFromCloud(currentUser.uid, id).catch(console.error);
+    }
   };
 
   const handleQuotationStatusChange = (id: string, status: Quotation["status"]) => {
+    const target = quotations.find((q) => q.id === id);
     const updated = quotations.map((q) => (q.id === id ? { ...q, status } : q));
     setQuotations(updated);
     storage.saveQuotations(updated);
+    if (currentUser && target) {
+      saveQuotationToCloud(currentUser.uid, { ...target, status }).catch(console.error);
+    }
   };
 
   // One-click convert Quotation -> Invoice
@@ -160,6 +248,11 @@ export default function App() {
     setQuotations(updatedQuotes);
     storage.saveQuotations(updatedQuotes);
 
+    if (currentUser) {
+      saveInvoiceToCloud(currentUser.uid, newInvoice).catch(console.error);
+      saveQuotationToCloud(currentUser.uid, { ...quote, status: "converted", convertedToInvoiceId: newInvoiceId }).catch(console.error);
+    }
+
     // Navigate to invoices tab & show the converted invoice
     setActiveTab("invoices");
     setPrintingInvoice(newInvoice);
@@ -176,6 +269,9 @@ export default function App() {
     }
     setInvoices(updated);
     storage.saveInvoices(updated);
+    if (currentUser) {
+      saveInvoiceToCloud(currentUser.uid, invoice).catch(console.error);
+    }
     setIsInvoiceEditorOpen(false);
     setEditingInvoice(null);
   };
@@ -184,12 +280,19 @@ export default function App() {
     const updated = invoices.filter((i) => i.id !== id);
     setInvoices(updated);
     storage.saveInvoices(updated);
+    if (currentUser) {
+      deleteInvoiceFromCloud(currentUser.uid, id).catch(console.error);
+    }
   };
 
   const handleInvoiceStatusChange = (id: string, status: Invoice["status"]) => {
-    const updated = invoices.map((i) => (i.id === id ? { ...i, status } : i));
-    setInvoices(updated);
-    storage.saveInvoices(updated);
+    const target = invoices.find((i) => i.id === id);
+    const updated = invoices.map((i) => (i.id === id ? { ...i, status } : q => q));
+    setInvoices(updated as any);
+    storage.saveInvoices(updated as any);
+    if (currentUser && target) {
+      saveInvoiceToCloud(currentUser.uid, { ...target, status }).catch(console.error);
+    }
   };
 
   const handleSavePaymentRecord = (payment: PaymentRecord) => {
@@ -211,8 +314,11 @@ export default function App() {
     );
     setInvoices(updatedInvoices);
     storage.saveInvoices(updatedInvoices);
+    if (currentUser) {
+      saveInvoiceToCloud(currentUser.uid, updatedInvoice).catch(console.error);
+    }
 
-    // Auto-create matching bank transaction record if desired
+    // Auto-create matching bank transaction record
     const newTx: BankTransaction = {
       id: `tx_${Date.now()}`,
       bankAccountId: bankAccounts[0]?.id || "bank_1",
@@ -229,6 +335,9 @@ export default function App() {
     const updatedTx = [newTx, ...bankTransactions];
     setBankTransactions(updatedTx);
     storage.saveBankTransactions(updatedTx);
+    if (currentUser) {
+      saveBankTransactionToCloud(currentUser.uid, newTx).catch(console.error);
+    }
 
     setRecordingPaymentInvoice(null);
   };
@@ -253,6 +362,14 @@ export default function App() {
     setProfile(updatedProfile);
     storage.saveProfile(updatedProfile);
 
+    if (currentUser) {
+      saveBankAccountToCloud(currentUser.uid, account).catch(console.error);
+      for (const t of transactions) {
+        saveBankTransactionToCloud(currentUser.uid, t).catch(console.error);
+      }
+      saveProfileToCloud(currentUser.uid, updatedProfile).catch(console.error);
+    }
+
     setIsBankLoginOpen(false);
   };
 
@@ -263,6 +380,9 @@ export default function App() {
     setBankTransactions(updatedTx);
     storage.saveBankAccounts(updatedAccounts);
     storage.saveBankTransactions(updatedTx);
+    if (currentUser) {
+      deleteBankAccountFromCloud(currentUser.uid, id).catch(console.error);
+    }
   };
 
   const handleDeleteAllBankAccountsAndTransactions = () => {
@@ -278,6 +398,10 @@ export default function App() {
     );
     setBankAccounts(updatedAccounts);
     storage.saveBankAccounts(updatedAccounts);
+    if (currentUser) {
+      const acc = updatedAccounts.find((a) => a.id === id);
+      if (acc) saveBankAccountToCloud(currentUser.uid, acc).catch(console.error);
+    }
   };
 
   const handleAddManualBankTransaction = (transaction: BankTransaction) => {
@@ -293,6 +417,12 @@ export default function App() {
     );
     setBankAccounts(updatedAccounts);
     storage.saveBankAccounts(updatedAccounts);
+
+    if (currentUser) {
+      saveBankTransactionToCloud(currentUser.uid, transaction).catch(console.error);
+      const acc = updatedAccounts.find((a) => a.id === transaction.bankAccountId);
+      if (acc) saveBankAccountToCloud(currentUser.uid, acc).catch(console.error);
+    }
   };
 
   const handleDeleteBankTransaction = (id: string) => {
@@ -310,6 +440,10 @@ export default function App() {
       setBankAccounts(updatedAccounts);
       storage.saveBankAccounts(updatedAccounts);
     }
+
+    if (currentUser) {
+      deleteBankTransactionFromCloud(currentUser.uid, id).catch(console.error);
+    }
   };
 
   const handleReconcileTransaction = (
@@ -317,19 +451,24 @@ export default function App() {
     matchedId?: string,
     matchedType?: "invoice" | "expense"
   ) => {
+    let modifiedTx: BankTransaction | undefined;
     const updatedTx = bankTransactions.map((tx) => {
       if (tx.id === txId) {
-        return {
+        modifiedTx = {
           ...tx,
           isReconciled: !tx.isReconciled,
           matchedId: matchedId || tx.matchedId,
           matchedType: matchedType || tx.matchedType,
         };
+        return modifiedTx;
       }
       return tx;
     });
     setBankTransactions(updatedTx);
     storage.saveBankTransactions(updatedTx);
+    if (currentUser && modifiedTx) {
+      saveBankTransactionToCloud(currentUser.uid, modifiedTx).catch(console.error);
+    }
   };
 
   // Expense handlers
@@ -337,12 +476,18 @@ export default function App() {
     const updated = [expense, ...expenses];
     setExpenses(updated);
     storage.saveExpenses(updated);
+    if (currentUser) {
+      saveExpenseToCloud(currentUser.uid, expense).catch(console.error);
+    }
   };
 
   const handleDeleteExpense = (id: string) => {
     const updated = expenses.filter((e) => e.id !== id);
     setExpenses(updated);
     storage.saveExpenses(updated);
+    if (currentUser) {
+      deleteExpenseFromCloud(currentUser.uid, id).catch(console.error);
+    }
   };
 
   // Counts for badges
@@ -356,8 +501,10 @@ export default function App() {
       {/* Header Bar */}
       <Header
         profile={profile}
+        user={currentUser}
         onOpenSettings={() => handleOpenSettings("business")}
         onOpenOfflineModal={() => setIsOfflineModalOpen(true)}
+        onOpenCloudSync={() => setIsCloudSyncOpen(true)}
         onNavigate={(tab) => {
           if (tab === "desktop-backup") {
             handleOpenSettings("backup");
@@ -541,7 +688,7 @@ export default function App() {
             Fast-Books Bookkeeping Engine • Sole Proprietor: <strong className="text-white">{profile.ownerName}</strong>
           </p>
           <p className="text-slate-500">
-            Offline Hard Drive Persistence Active ({profile.currency} - {profile.currencySymbol})
+            {currentUser ? `Firebase Cloud Synced (${currentUser.email})` : `Local Storage & Offline Mode`} ({profile.currency} - {profile.currencySymbol})
           </p>
         </div>
       </footer>
@@ -634,6 +781,22 @@ export default function App() {
           onClose={() => setIsOfflineModalOpen(false)}
         />
       )}
+
+      {isCloudSyncOpen && (
+        <CloudSyncModal
+          user={currentUser}
+          profile={profile}
+          clients={clients}
+          quotations={quotations}
+          invoices={invoices}
+          bankAccounts={bankAccounts}
+          bankTransactions={bankTransactions}
+          expenses={expenses}
+          onClose={() => setIsCloudSyncOpen(false)}
+          onReloadState={handleReloadState}
+        />
+      )}
     </div>
   );
 }
+
